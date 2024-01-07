@@ -22,6 +22,8 @@ namespace WeatherObservation
             {
                 options.AddPolicy("AllowAll", builder => builder.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader());
             });
+            
+            services.AddHttpClient();
 
             services.AddControllers().AddNewtonsoftJson();
         }

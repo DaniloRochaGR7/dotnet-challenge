@@ -1,9 +1,7 @@
-﻿using CommonResources.Model;
-using Microsoft.AspNetCore.Mvc;
-using Newtonsoft.Json;
-using System.Linq;
+﻿using Microsoft.AspNetCore.Mvc;
 using System.Net.Http;
 using System.Threading.Tasks;
+using WeatherObservation.Utils;
 
 namespace WeatherObservation.Controllers
 {
@@ -11,73 +9,45 @@ namespace WeatherObservation.Controllers
     [ApiController]
     public class WeatherController : ControllerBase
     {
-        private readonly HttpClient _httpClient;
+        private readonly IHttpClientFactory _httpClientFactory;
 
-        public WeatherController()
+        public WeatherController(IHttpClientFactory httpClientFactory)
         {
-            _httpClient = new HttpClient();
-        }
-
-        [HttpGet()]
-        public async Task<IActionResult> GetWeatherData()
-        {
-            string apiUrl = $"http://www.bom.gov.au/fwo/IDS60901/IDS60901.94672.json";
-
-            HttpResponseMessage response = await _httpClient.GetAsync(apiUrl);
-
-            if (response.IsSuccessStatusCode)
-            {
-                string json = await response.Content.ReadAsStringAsync();
-                WeatherData weatherData = JsonConvert.DeserializeObject<WeatherData>(json);
-
-                return Ok(weatherData);
-            }
-
-            return BadRequest("Failed to retrieve weather data.");
+            _httpClientFactory = httpClientFactory;
         }
 
         [HttpGet("{wmo}")]
         public async Task<IActionResult> GetWeatherData(string wmo)
         {
-            string apiUrl = $"http://www.bom.gov.au/fwo/IDS60901/IDS60901.{wmo}.json";
+            var client = _httpClientFactory.CreateClient();
 
-            HttpResponseMessage response = await _httpClient.GetAsync(apiUrl);
+            HttpResponseMessage response = await client.GetAsync(UrlUtils.GetUrl(wmo));
 
             if (response.IsSuccessStatusCode)
             {
                 string json = await response.Content.ReadAsStringAsync();
-                WeatherData weatherData = JsonConvert.DeserializeObject<WeatherData>(json);
-
-                return Ok(weatherData);
+                return Ok(json);
             }
-
-            return BadRequest("Failed to retrieve weather data.");
+            else
+            {
+                return StatusCode((int)response.StatusCode, "Error occurred while fetching weather data");
+            }
         }
 
-        [HttpGet("{wmo}/airtemp")]
-        public async Task<IActionResult> GetAirTemp(string wmo)
+        [HttpGet("{wmo}/{dataType}")]
+        public async Task<IActionResult> GetSpecificObservationData(string wmo, string dataType)
         {
-            string apiUrl = $"http://www.bom.gov.au/fwo/IDS60901/IDS60901.{wmo}.json";
-
-            HttpResponseMessage response = await _httpClient.GetAsync(apiUrl);
+            var client = _httpClientFactory.CreateClient();
+            HttpResponseMessage response = await client.GetAsync(UrlUtils.GetUrl(wmo));
 
             if (response.IsSuccessStatusCode)
             {
                 string json = await response.Content.ReadAsStringAsync();
-                WeatherData weatherData = JsonConvert.DeserializeObject<WeatherData>(json);
-
-                // Extract air temperature data
-                var airTempData = weatherData.Observations.Data.Select(observation => new
-                {
-                    observation.Name,
-                    observation.LocalDateTimeFull,
-                    observation.AirTemp
-                });
-
-                return Ok(airTempData);
+                var specificData = ObservationUtils.ExtractSpecificValue(json, dataType);
+                return Ok(specificData);
             }
 
-            return BadRequest("Failed to retrieve air temperature data.");
+            return BadRequest($"Failed to retrieve {dataType} data.");
         }
     }
 }
